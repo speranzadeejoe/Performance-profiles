@@ -1,0 +1,229 @@
+---
+title: "STAT5020 — Assignment 2 (Part 1)"
+author: "Speranza Deejoe"
+format: pdf
+editor: visual
+---
+
+# **Loading the dataset**
+
+```{r}
+data_name <- "C:/Users/MyUNI/Downloads/statics for datascience/Student_performance_data.csv"
+data <- read.csv(data_name)
+{head(data)}
+```
+
+```{r}
+data$GradeClass <- factor(data$GradeClass, 
+                          levels = c(0, 1, 2, 3, 4), 
+                          labels = c("A", "B", "C", "D", "F"))
+```
+
+```{r}
+data$Tutoring <- factor(data$Tutoring, 
+                        levels = c(0, 1), 
+                        labels = c("No", "Yes"))
+```
+
+```{r}
+data$Gender <- factor(data$Gender, 
+                      levels = c(0, 1), 
+                      labels = c("Male", "Female"))
+```
+
+# **Part 1 — Understanding the Data (20 marks)**
+
+## **1. Variable types**
+
+### **Age**
+
+Age is a numerical variable because it represents a measurable quantity. Since it is recorded in whole numbers, it is classified as discrete numerical data. The differences between values are meaningful (e.g., 16 vs 17).
+
+### **Gender**
+
+Gender is coded using numbers (0/1), but these values represent categories, not quantities. Because the categories have no natural order, Gender is a categorical nominal variable.
+
+### **StudyTimeWeekly**
+
+StudyTimeWeekly is a numerical variable that measures hours studied per week. It can take decimal values, so it is considered continuous numerical data.
+
+### **Absences**
+
+Absences counts how many classes a student missed. It is a numerical variable, but because it represents a count and cannot take decimal values, it is discrete numerical data.
+
+### **GPA**
+
+GPA is a numerical variable measured on a continuous scale from 0 to 4. The differences between values are meaningful, so GPA is classified as continuous numerical data.
+
+### **GradeClass**
+
+GradeClass uses numbers (0–4) to represent ordered grade categories. The order matters, but the spacing between categories is not equal. Therefore, GradeClass is an ordinal categorical variable.
+
+### **StudentID**
+
+StudentID is an identifier, not a meaningful variable for analysis, because it does not measure or categorize anything about the student.
+
+## **2. Research question**
+
+**Question:** **Do students who participate in extracurricular activities achieve higher GPAs than those who do not?**
+
+```{r}
+str(data)
+
+
+```
+
+# **Part 2 — One-variable analysis.**
+
+## **1. Categorical variable : Gender**
+
+```{r}
+freq <- table(data$Gender)
+prop <- round(prop.table(freq) * 100, 1)
+cbind(Frequency = freq, Percentage = prop)
+```
+
+```{r}
+barplot(table(data$Gender),
+        main = "Gender Distribution",
+        xlab = "Gender",
+        ylab = "Number of Students",
+        col = c("skyblue", "pink"),
+        border = "white",
+        ylim = c(0, 1400),
+        names.arg = c("Male", "Female"))
+
+
+```
+
+### Description: 
+
+The variable *Gender* is a categorical nominal variable with two categories coded as 0 and 1 (0-male,1-female). The frequency table shows that the number of female is more than the number of male, indicating an imbalance in the gender distribution of the sample. The bar chart visually confirms this pattern, with one bar noticeably taller. This suggests that the dataset contains more students from one gender group, which may influence later analyses if gender is related to academic outcomes.
+
+## **2. Numerical variable : GPA**
+
+```{r}
+hist(data$GPA,
+     main = "Distribution of GPA",
+     xlab = "GPA",
+     ylab = "Number of Students",
+     col = "lightblue",
+     border = "white",
+     breaks = 15,
+     xlim = c(0, 4))
+abline(v = mean(data$GPA), col = "red", lwd = 2, lty = 2)
+abline(v = median(data$GPA), col = "darkgreen", lwd = 2, lty = 2)
+legend("topright", legend = c("Mean", "Median"),
+       col = c("red", "darkgreen"), lwd = 2, lty = 2)
+
+
+```
+
+```{r}
+mean(data$GPA)
+sd(data$GPA)
+median(data$GPA)
+IQR(data$GPA)
+
+```
+
+### Description: 
+
+The mean GPA is 1.906 and the standard deviation is 0.915, showing that the students GPAs vary quite a bit across the 0-4 scale. The median (1.893) is very close to the mean (1.906), which is consistent with near-symmetry. The IQR is approximately 1.45 shows that the middle 50% of students span a fairly wide range of GPAs. There are no obvious extreme outliers that are visible, as values spread naturally from 0-4. Therefore the distribution is approximately symmetric with no strong skew, the mean and standard deviation are appropriate summary measures here.
+
+## **Part 3 — Relationship between variables**
+
+### **1. Two categorical variables**
+
+```{r}
+table(data$Tutoring, data$GradeClass)
+
+```
+
+```{r}
+prop.table(table(data$Tutoring, data$GradeClass), 1)
+
+```
+
+### Description:
+
+Among students without tutoring, 52.8% received an F, and only 3.3% earned an A. In the tutoring group, the share of failing students drops to 45.6%, and the percentage of A grades rises to 7.2%. This means fewer students fail when they attend tutoring, and more reach the top grade. The middle grades (B, C, D) are also slightly more common among students who had tutoring. Overall, the numbers suggest that students who attend tutoring tend to get better grades, though this does not prove tutoring is the direct cause.
+
+## **2. One numerical and one categorical variable** 
+
+```{r}
+boxplot(GPA ~ Tutoring,
+        data = data,
+        main = "GPA Across Tutoring Groups",
+        xlab = "Tutoring (0 = No, 1 = Yes)",
+        ylab = "GPA",
+        col = c("lightblue", "lightgreen"))
+
+
+```
+
+```{r}
+tapply(data$GPA, data$Tutoring, mean)
+tapply(data$GPA, data$Tutoring, median)
+tapply(data$GPA, data$Tutoring, sd)
+tapply(data$GPA, data$Tutoring, IQR)
+
+```
+
+### **Description:**
+
+Students who received tutoring have higher GPAs on average. Their mean GPA is 2.108, compared to 1.8186 for students without tutoring. The medians show the same pattern, with 2.095 for the tutoring group and 1.8186 for the non‑tutoring group. The spread is almost the same in both groups, with standard deviations around 0.905. The non‑tutoring group has more low GPA values, which pulls their average down. Overall, the results suggest that students who receive tutoring tend to achieve slightly better GPAs.
+
+# **Part 4 — Normal distribution and probability**
+
+##  **1. Assess Normality** 
+
+```{r}
+hist(data$GPA,
+     main = "Histogram of GPA",
+     xlab = "GPA",
+     col = "lightblue",
+     border = "black")
+
+```
+
+### Description:
+
+The GPA histogram looks roughly like a bell shape, with most values in the middle. It isn’t perfectly smooth, and there are some low GPAs that make the left side a bit uneven. The ends are also limited because GPA can only go from 0 to 4. Even with these limits, the overall pattern is close enough to a Normal curve. So, a Normal model isn’t perfect, but it’s okay to use as an approximation.
+
+## **2. Probability calculation** 
+
+```{r}
+mean_gpa <- mean(data$GPA)
+sd_gpa <- sd(data$GPA)
+
+pnorm(2.5, mean = mean_gpa, sd = sd_gpa)
+mean(data$GPA < 2.5)
+
+```
+
+### **Description:**
+
+Using the Normal model with the sample mean and standard deviation, the probability that a randomly selected student has a GPA below 2.5 is approximately 0.741. The empirical proportion from the dataset, calculated by counting how many students actually have GPA \< 2.5 is approximately 0.704. The two values are usually similar but not identical, because the actual GPA distribution is slightly skewed and contains low outliers. Overall, the comparison shows that the Normal model gives a reasonable approximation, but the empirical proportion more accurately reflects the true distribution of GPA in this sample.
+
+## **3. Percentile cutoff :**
+
+```{r}
+mean_gpa <- mean(data$GPA)
+sd_gpa   <- sd(data$GPA)
+
+# Normal-theory cutoff for top 10%
+cutoff_normal <- qnorm(0.90, mean = mean_gpa, sd = sd_gpa)
+
+# Empirical cutoff from the data (90th percentile)
+cutoff_empirical <- quantile(data$GPA, 0.90)
+
+cutoff_normal
+cutoff_empirical
+
+
+```
+
+### **Description:**
+
+Assuming GPA follows a Normal distribution, the GPA cutoff for the top 10% of students is 3.079006. The empirical cutoff from the dataset that shows the actual GPA threshold for the top 10% of students in this sample is 3.13249. If the Normality assumption is reasonable, these two cutoff values should be fairly similar, though small differences are expected due to skewness and outliers in the real data. Overall, the comparison shows how a theoretical Normal model and the observed data can be used together to understand high academic performance in terms of GPA.
