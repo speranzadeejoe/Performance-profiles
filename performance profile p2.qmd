@@ -1,0 +1,478 @@
+---
+title: "STAT5020 - Assignment 1 (part 2)"
+format: html
+editor: visual
+author: Speranza Deejoe
+---
+
+# **Introduction:**
+
+Throughout this report, we use a significance level of α = 0.10 (confidence level = 90%) when deciding whether a statistical result is meaningful.
+
+# **Loading the dataset:**
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(car)        
+library(rstatix) 
+
+```
+
+```{r}
+data_name <- "C:/Users/MyUNI/Downloads/statics for datascience/Student_performance_data.csv"
+df <- read.csv(data_name)
+{head(df)}
+```
+
+## Converting the categorical variables to factors:
+
+```{r}
+df$GenderF <- factor(df$Gender,
+                     levels = c(0, 1),
+                     labels = c("Male", "Female"))
+
+df$EthnicityF <- factor(df$Ethnicity,
+                        levels = c(0, 1, 2, 3),
+                        labels = c("Caucasian", "African American", "Asian", "Other"))
+
+df$ParentalEducationF <- factor(df$ParentalEducation,
+                                levels = c(0, 1, 2, 3, 4),
+                                labels = c("None", "High School", "Some College",
+                                           "Bachelor's", "Higher"))
+
+df$ParentalSupportF <- factor(df$ParentalSupport,
+                              levels = c(0, 1, 2, 3, 4),
+                              labels = c("None", "Low", "Moderate", "High", "Very High"))
+
+df$TutoringF <- factor(df$Tutoring,
+                       levels = c(0, 1),
+                       labels = c("No", "Yes"))
+
+df$ExtracurricularF <- factor(df$Extracurricular,
+                              levels = c(0, 1),
+                              labels = c("No", "Yes"))
+
+df$GradeClassF <- factor(df$GradeClass,
+                         levels = c(0, 1, 2, 3, 4),
+                         labels = c("A", "B", "C", "D", "F"))
+
+# ggplot theme
+theme_set(theme_bw(base_size = 12))
+```
+
+## **Part 1. Effect of Parental Support on students performance measured by GPA (25 marks):**
+
+This section looks at whether parental support has an effect on students’ academic performance, measured by GPA. The goal is to see if students with higher levels of support tend to achieve better grades compared to those with little or no support. By comparing GPA across the five support categories, we can understand whether parental involvement is linked to meaningful differences in student performance
+
+**H₀:** All parental support groups have the same mean GPA.
+
+**H₁:** At least one parental support group has a different mean GPA.
+
+#### Graphical Summary using BOX-PLOT:
+
+```{r}
+# USING BOXPLOT FOR GRAPHICAL SUMMARY 
+ggplot(df, aes(x = ParentalSupportF, y = GPA, fill = ParentalSupportF)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 3,
+               color = "black", show.legend = FALSE) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(
+    title = "GPA by Parental Support Level",
+    x = "Parental Support Level",
+    y = "GPA (0–4)",
+    fill = "Parental Support"
+  ) +
+  theme(legend.position = "none")
+
+```
+
+#### Numerical Summary:
+
+```{r}
+part1_summary <- df %>%
+  group_by(`Parental Support` = ParentalSupportF) %>%
+  summarise(
+    n       = n(),
+    Mean    = round(mean(GPA), 3),
+    SD      = round(sd(GPA), 3),
+    Median  = round(median(GPA), 3),
+    Min     = round(min(GPA), 3),
+    Max     = round(max(GPA), 3),
+    .groups = "drop"
+  )
+
+kable(part1_summary, align = "lrrrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+### Description:
+
+Both the boxplot and the numerical summary show a clear pattern. GPA steadily increases as parental support becomes stronger. The boxplot shows that the median and mean GPA rise across the five support levels, with the distributions shifting upward from None to Very High support. This trend is confirmed by the numerical values. students with no parental support have the lowest mean GPA (1.540, SD = 0.918), followed by those with low support (1.756, SD = 0.894) and moderate support (1.884, SD = 0.913). GPA continues to improve for the high support group (2.042, SD = 0.883), and reaches the highest level among students with very high support, who average 2.192 (SD = 0.895). Median GPAs show the same upward progression, increasing from 1.406 (None) to 2.198 (Very High). Although all groups span a wide GPA range (Min = 0.000–0.300, Max = 3.561–4.000), both the plot and the summary statistics consistently indicate that higher parental support is associated with better academic performance.
+
+#### Statistical Test And Assumptions:
+
+A one-way ANOVA tests whether the population means of GPA differ across parental support groups. Its key assumptions are:
+
+1.  **Independence** — observations are independent (satisfied by study design).
+2.  **Normality** — GPA within each group should be approximately normally distributed.
+3.  **Homogeneity of variances** — the variance should be equal across groups (tested using Levene's test).
+
+```{r}
+# QQ PLOT
+ggplot(df, aes(sample = GPA)) +
+  stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(color = "red") +
+  facet_wrap(~ ParentalSupportF, ncol = 3) +
+  labs(title = "QQ-Plots of GPA by Parental Support Level",
+       x = "Theoretical Quantiles", y = "Sample Quantiles")
+```
+
+```{r}
+# LEVENES TEST 
+levene_part1 <- leveneTest(GPA ~ ParentalSupportF, data = df, center = mean)
+print(levene_part1)
+```
+
+### Description:
+
+The QQ-plots indicate that GPA within each group is approximately normally distributed. With a sample size of 2,392 total observations(approximately), the central limit theorem further ensures robustness of the ANOVA F-test.
+
+### ANOVA Test:
+
+**H₀:** All parental support groups have the same mean GPA.
+
+**H₁:** At least one parental support group has a different mean GPA.
+
+```{r}
+anova_part1 <- aov(GPA ~ ParentalSupportF, data = df)
+anova_summary <- summary(anova_part1)
+print(anova_summary)
+```
+
+### Description:
+
+Since the ANOVA result was highly significant, it tells us that GPA differs somewhere across the parental support groups, but it doesn’t show exactly which groups are different from each other. To identify the specific pairs that vary a post‑hoc Tukey test is needed.
+
+#### Post-hoc Tukey:
+
+**H₀:** The difference in mean GPA between the two groups is zero.
+
+**H₁:** The difference in mean GPA between the two groups is not zero.
+
+```{r}
+tukey_part1 <- TukeyHSD(anova_part1, conf.level = 0.90)
+print(tukey_part1)
+```
+
+```{r}
+tukey_part1 <- TukeyHSD(anova_part1, conf.level = 0.90)
+
+# PLOTTING TUCKEY RESULTS 
+par(mar = c(5, 12, 4, 2))
+plot(tukey_part1,
+     las = 1,
+     cex.axis = 0.7)
+
+```
+
+#### Results interpretation and conclusion:
+
+The ANOVA test showed that the average GPA is not the same across the five parental support groups, with a strong result of F(4, 2387) = 22.72 and a p‑value \< 2e‑16, meaning the differences are real. The Tukey test then showed where these differences occur. Students with Low support scored about 0.22 GPA points higher than those with No support, Moderate support students scored about 0.34 points higher, High support students scored about 0.50 points higher, and Very High support students scored about 0.65 points higher than those with No support. Some higher‑support groups also differed from each other, such as High vs Low (+0.29) and Very High vs Moderate (+0.31). Given the extremely small p‑value, we reject the null hypothesis and conclude that not all group means are equal. Overall, the results provide strong evidence that parental support has a meaningful impact on academic performance, with greater support linked to higher GPA.
+
+## Part 2. Your own research questions (75 marks):
+
+### Research question 1 : Does Tutoring Improve GPA? (two-sample independent t-test)
+
+This section examines whether students who receive tutoring tend to achieve higher GPAs than those who do not. By analyzing the differences in average GPA between tutored and non‑tutored students, we can determine whether tutoring has a meaningful impact on academic outcomes.
+
+**H₀:** The mean GPA of tutored students equals the mean GPA of non-tutored students.
+
+**H₁:** Tutored students have a higher mean GPA.
+
+Significance level: **α = 0.10**.
+
+#### Graphical Summary Using BOX-PLOT:
+
+```{r}
+ggplot(df, aes(x = TutoringF, y = GPA, fill = TutoringF)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 4,
+               color = "black", show.legend = FALSE) +
+  scale_fill_manual(values = c("No" = "#E07B7B", "Yes" = "#7BB8E0")) +
+  labs(
+    title = "GPA based on Tutoring Status",
+    x = "Tutoring",
+    y = "GPA (0–4)",
+    fill = "Tutoring"
+  ) +
+  theme(legend.position = "none")
+
+```
+
+#### Numerical Summary:
+
+```{r}
+rq1_summary <- df %>%
+  group_by(Tutoring = TutoringF) %>%
+  summarise(
+    n      = n(),
+    Mean   = round(mean(GPA), 3),
+    SD     = round(sd(GPA), 3),
+    Median = round(median(GPA), 3),
+    .groups = "drop"
+  )
+
+kable(rq1_summary, align = "lrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+```
+
+### Description:
+
+The boxplot shows that students receiving tutoring have a slightly higher median GPA, though the distributions overlap considerably.The numerical summary shows that students who received tutoring tend to perform better academically than those who did not. The No‑tutoring group has a mean GPA of 1.819 (SD = 0.906) with a median of 1.819, based on 1,671 students. In contrast, the Tutoring group shows a higher mean GPA of 2.108 (SD = 0.905) and a median of 2.096, based on 721 students. These differences suggest that students who participate in tutoring generally achieve higher GPAs than those who do not, indicating a positive association between tutoring and academic performance.
+
+#### Statistical Test And Assumptions:
+
+The two‑sample independent t‑test is used when we want to compare the mean of one group to the mean of another group. In this the test compares students who received tutoring with students who did not receive tutoring to determine whether the difference in their average GPA reflects a meaningful improvement in academic performance.
+
+The two-sample independent t-test requires:
+
+1.  **Independence** — the two groups are independent (satisfied).
+2.  **Normality** — GPA within each group is approximately normal (checked with QQ-plots).
+3.  **Equal variances** — assessed using an F-test (Welch's t-test will be used if variances are unequal).
+
+```{r}
+ggplot(df, aes(sample = GPA)) +
+  stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(color = "red") +
+  facet_wrap(~ TutoringF) +
+  labs(title = "QQ-Plots of GPA based on Tutoring Status",
+       x = "Theoretical Quantiles", y = "Sample Quantiles")
+```
+
+```{r}
+# F-test 
+var.test(GPA ~ TutoringF, data = df)
+```
+
+### Description:
+
+The F‑test shows that the GPA variances for the tutoring and non‑tutoring groups are almost identical (F = 1.0014, p = 0.9885), meaning there is no evidence of unequal variances. The QQ‑plots for both groups also follow the reference line fairly well, suggesting the normality assumption is reasonable. With large sample sizes (1,671 without tutoring and 721 with tutoring), these results support using a two‑sample t‑test to compare the mean GPAs of the two groups.
+
+### t-test:
+
+```{r}
+#two-sample t-test
+t_test_rq1 <- t.test(GPA ~ TutoringF, data = df,
+                      alternative = "less",   # "less" because No < Yes in factor order
+                      conf.level = 0.90,
+                      var.equal = FALSE)
+print(t_test_rq1)
+```
+
+```{r}
+# Cohens d effect size
+rq1_es <- df %>%
+  cohens_d(GPA ~ TutoringF)
+print(rq1_es)
+```
+
+#### Results interpretation and conclusion:
+
+The Welch two‑sample t‑test shows a strong and statistically significant difference in GPA between students who did not receive tutoring and those who did (t = –7.17, df = 1366.6, p = 6.0 × 10⁻¹³). The mean GPA is 1.819 for the No‑tutoring group and 2.108 for the Tutoring group, and the 90% confidence interval for the difference extends up to –0.238, indicating that the tutored group reliably scores higher. The effect size, Cohen’s d = –0.320, falls in the small range, meaning that although the difference is statistically significant, the practical impact is modest. Given the extremely small p‑value, we reject the null hypothesis that the two group means are equal. Overall, the results provide clear evidence that tutoring is associated with higher GPA, but the size of the improvement is relatively small in practical terms.
+
+### Research question 2 : Does Parental Education Level Affect GPA? (One-Way ANOVA)
+
+This section investigates whether students GPA differs based on their parents highest level of education. By comparing GPA across the five parental education categories, we can assess whether higher parental education is associated with better academic performance or whether the differences between groups are minimal.
+
+**H₀:** Mean GPA is equal across all parental education levels.
+
+**H₁:** At least one parental education group has a different mean GPA.
+
+Significance level: **α = 0.10**.
+
+#### Graphical Summary Using BOX-PLOT:
+
+```{r}
+ggplot(df, aes(x = ParentalEducationF, y = GPA, fill = ParentalEducationF)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 3,
+               color = "black", show.legend = FALSE) +
+  scale_fill_brewer(palette = "Greens") +
+  labs(
+    title = "GPA based on Parental Education Level",
+    x = "Parental Education Level",
+    y = "GPA (0–4)",
+    fill = "Parental Education"
+  ) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 15, hjust = 1))
+```
+
+#### Numerical Summary:
+
+```{r}
+rq2_summary <- df %>%
+  group_by(`Parental Education` = ParentalEducationF) %>%
+  summarise(
+    n      = n(),
+    Mean   = round(mean(GPA), 3),
+    SD     = round(sd(GPA), 3),
+    Median = round(median(GPA), 3),
+    Min    = round(min(GPA), 3),
+    Max    = round(max(GPA), 3),
+    .groups = "drop"
+  )
+
+kable(rq2_summary, align = "lrrrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+### Description:
+
+The boxplot and numerical summary together show how GPA varies across different levels of parental education. The mean GPA is 1.893 for students whose parents have no formal education, 1.944 for High School, 1.930 for Some College, 1.809 for Bachelor’s, and 1.816 for Higher degrees. Although the differences are not large, the plot suggests slight variation in central tendency and spread across the five groups. These patterns indicate that GPA may differ depending on parental education level, which motivates the use of a one‑way ANOVA to formally test whether the mean GPA varies across the five education categories.
+
+#### Statistical Test And Assumptions:
+
+The one-way ANOVA assumptions are the same as in Part 1: independence, normality within groups, and homogeneity of variances.
+
+```{r}
+ggplot(df, aes(sample = GPA)) +
+  stat_qq(alpha = 0.4, size = 0.8) +
+  stat_qq_line(color = "red") +
+  facet_wrap(~ ParentalEducationF, ncol = 3) +
+  labs(title = "QQ-Plots of GPA based on Parental Education Level",
+       x = "Theoretical Quantiles", y = "Sample Quantiles")
+```
+
+```{r}
+# Levenes test
+levene_rq2 <- leveneTest(GPA ~ ParentalEducationF, data = df, center = mean)
+print(levene_rq2)
+```
+
+### Description:
+
+The QQ‑plots show that the GPA distributions for the five parental education groups follow the reference line fairly well, so the normality assumption is reasonable. Levene’s test gives F = 2.301 and p = 0.0565, which is slightly above 0.05 but below 0.10, suggesting only weak evidence of unequal variances. Overall, the assumptions are mostly met, and ANOVA can still be used, with just a bit of caution due to the borderline variance result.
+
+### ANOVA TEST:
+
+```{r}
+# One-way ANOVA
+anova_rq2 <- aov(GPA ~ ParentalEducationF, data = df)
+print(summary(anova_rq2))
+```
+
+```{r}
+# Post-hoc Tukey HSD
+tukey_rq2 <- TukeyHSD(anova_rq2, conf.level = 0.90)
+print(tukey_rq2)
+
+```
+
+```{r}
+tukey_rq2 <- TukeyHSD(anova_rq2, conf.level = 0.90)
+
+par(mar = c(5, 12, 4, 2))
+plot(tukey_rq2,
+     las = 1,
+     cex.axis = 0.7)
+
+
+
+
+
+```
+
+#### **Results interpretation and conclusion:**
+
+The one‑way ANOVA shows no significant difference in GPA across parental education levels (F = 1.808, p = 0.124), so we fail to reject H₀ at α = 0.10. The Tukey HSD results confirm this, as all adjusted p‑values are large and every 90% confidence interval includes zero, indicating no meaningful pairwise differences. Because the p‑value exceeds the significance level, we retain the null hypothesis that the group means are equal. Overall, parental education level does not significantly affect GPA
+
+### Research Question 3: Is There an Association Between Gender and Grade Class?(Chi-Squared Test)
+
+This section examines whether students’ grade classifications differ by gender. Since both variables are categorical, a chi‑squared test of independence is used to determine whether the distribution of grade classes varies meaningfully between males and females. By comparing the observed and expected counts across categories, we can assess whether gender is associated with differences in academic grade outcomes or whether the patterns are similar across groups.
+
+**H₀:** Gender and grade class are independent (no association).
+
+**H₁:** Gender and grade class are not independent (there is an association).
+
+Significance level: **α = 0.10**.
+
+### Graphical Summary Using BAR-CHART:
+
+```{r}
+df %>%
+  count(GenderF, GradeClassF) %>%
+  group_by(GenderF) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(aes(x = GradeClassF, y = prop, fill = GenderF)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("Male" = "#5B8DB8", "Female" = "#D4748C")) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Grade Class Distribution by Gender",
+    x = "Grade Class",
+    y = "Proportion of Students",
+    fill = "Gender"
+  )
+
+```
+
+#### Numerical Summary:
+
+```{r}
+# Contingency table
+ct_rq3 <- table(df$GenderF, df$GradeClassF)
+ct_df <- as.data.frame.matrix(ct_rq3)
+ct_df <- cbind(Gender = rownames(ct_df), ct_df)
+
+kable(ct_df, align = "lrrrrr", row.names = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Grade Class" = 5))
+```
+
+### Description:
+
+The contingency table shows how grade outcomes are distributed across gender. Among males, the counts range from 58 (A) to 582 (F), while females show a similar pattern, ranging from 49 (A) to 629 (F). The bar plot illustrates these distributions visually: both genders have the highest proportion of students receiving an F, followed by D, C, B, and the lowest proportion receiving an A. The overall pattern appears similar for males and females, with no obvious large differences in grade class proportions between the two groups.
+
+#### STATISTICAL TEST AND ASSUMPTIONS:
+
+The chi‑squared test of independence is used to determine whether two categorical variables are associated by comparing the observed frequencies in each category to the frequencies expected under independence.
+
+The chi-squared test of independence requires:
+
+1.  **Independent observations** — satisfied (each student appears once).
+2.  **Expected cell frequencies ≥ 5** — checked below; with n = 2,392 this is almost always satisfied.
+3.  The data must be in a contingency table form — satisfied.
+
+### chi-squared test:
+
+```{r}
+# Check expected cell frequencies
+chisq_rq3_prelim <- chisq.test(ct_rq3)
+cat("Expected cell counts:\n")
+print(round(chisq_rq3_prelim$expected, 2))
+```
+
+```{r}
+# Chi-squared test of independence
+chisq_result_rq3 <- chisq.test(ct_rq3)
+print(chisq_result_rq3)
+```
+
+```{r}
+# Cramér's V effect size
+n_total <- sum(ct_rq3)
+k_min <- min(nrow(ct_rq3), ncol(ct_rq3)) - 1
+cramers_v <- sqrt(chisq_result_rq3$statistic / (n_total * k_min))
+cat(sprintf("Cramér's V = %.4f\n", cramers_v))
+
+```
+
+### Results interpretation and conclusion:
+
+The chi‑square test indicates no evidence of an association between gender and grade class (χ² = 1.9154, df = 4, p = 0.7513), so we retain H₀ at α = 0.10. All expected cell counts exceed 5, confirming that assumptions are met. The effect size is extremely small (Cramér’s V = 0.0283), reflecting a very weak influence of gender on grade outcomes. Overall, the results show that males and females have nearly identical grade distributions, and gender has a very weak effect on academic grade classification.
