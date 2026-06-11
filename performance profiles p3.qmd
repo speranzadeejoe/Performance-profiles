@@ -1,0 +1,460 @@
+---
+title: "STAT5020 - Assignment 2 (part 3) Regression"
+author: Speranza Deejoe - a1982940
+---
+
+# Introduction
+
+Throughout this report, we use a significance level of α = 0.05 when deciding whether a statistical result is meaningful.
+
+# Loading the dataset
+
+```{r}
+#| include: false
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+library(knitr)
+library(broom)
+library(car)
+library(lmtest)
+library(kableExtra)
+
+alpha <- 0.05
+```
+
+```{r}
+#| message: false
+data_name <- "C:/Users/MyUNI/Downloads/statics for datascience/Student_performance_data.csv"
+df <- read.csv(data_name)
+head(df)
+```
+
+## Converting categorical variables to factors
+
+```{r}
+df <- df |>
+  mutate(
+    GenderF = factor(Gender, levels = c(0, 1),
+                     labels = c("Male", "Female")),
+    EthnicityF = factor(Ethnicity, levels = 0:3,
+                        labels = c("Caucasian", "African American", "Asian", "Other")),
+    ParentalEducF = factor(ParentalEducation, levels = 0:4,
+                           labels = c("None", "High School", "Some College",
+                                      "Bachelor's", "Higher")),
+    ParentalSupportF = factor(ParentalSupport, levels = 0:4,
+                              labels = c("None", "Low", "Moderate", "High", "Very High")),
+    TutoringF = factor(Tutoring, levels = c(0, 1), labels = c("No", "Yes")),
+    ExtracurricularF = factor(Extracurricular, levels = c(0, 1), labels = c("No", "Yes")),
+    GradeClassF = factor(GradeClass, levels = 0:4,
+                         labels = c("A", "B", "C", "D", "F"))
+  )
+```
+
+------------------------------------------------------------------------
+
+# Part 1. Effect of StudyTimeWeekly on GPA
+
+## Problem Formulation
+
+Does the amount of time a student dedicates to study each week predict their GPA? We treat `StudyTimeWeekly` (hours per week, 0–20) as the sole predictor and `GPA` (0–4 scale) as the continuous response variable, fitting a simple linear regression model.
+
+## Graphical Summary
+
+```{r}
+ggplot(df, aes(x = StudyTimeWeekly, y = GPA)) +
+  geom_point(alpha = 0.15, colour = "steelblue") +
+  geom_smooth(method = "lm",    se = TRUE,  colour = "royalblue",  linewidth = 1) +
+  geom_smooth(method = "loess", se = FALSE, colour = "darkorange", linewidth = 1,
+              linetype = "dashed") +
+  labs(
+    title = "GPA vs. Weekly Study Time",
+    x     = "Study Time (hours/week)",
+    y     = "GPA"
+  ) +
+  theme_bw()
+```
+
+## Numerical Summary
+
+```{r}
+df |>
+  summarise(
+    `Mean GPA`         = round(mean(GPA), 3),
+    `SD GPA`           = round(sd(GPA), 3),
+    `Mean Study (hrs)` = round(mean(StudyTimeWeekly), 3),
+    `SD Study (hrs)`   = round(sd(StudyTimeWeekly), 3),
+    `Pearson r`        = round(cor(StudyTimeWeekly, GPA), 3)
+  ) |>
+  kable(caption = "Descriptive statistics and correlation for GPA and weekly study time.")
+```
+
+The scatter plot reveals a modest positive association between weekly study time and GPA. Both the LOESS and linear smoothers track each other closely, suggesting that a straight-line model is a reasonable approximation with no obvious non-linearity. The Pearson correlation of r = 0.179 confirms a weak-to-moderate positive relationship. Students study an average of 9.77 hours per week (SD = 5.65), with a mean GPA of 1.906 (SD = 0.915). The wide spread of points around the smoother already hints that study time alone will not be a highly predictive variable.
+
+## Model Fitting
+
+```{r}
+mod1 <- lm(GPA ~ StudyTimeWeekly, data = df)
+
+tidy(mod1, conf.int = TRUE, conf.level = 0.95) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Regression coefficients — GPA ~ StudyTimeWeekly")
+```
+
+```{r}
+glance(mod1) |>
+  select(r.squared, adj.r.squared, sigma, statistic, p.value, df, nobs) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Model fit statistics — GPA ~ StudyTimeWeekly")
+```
+
+## Diagnostics
+
+```{r}
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+plot(mod1, which = 1:4, sub.caption = "Model 1: GPA ~ StudyTimeWeekly")
+par(mfrow = c(1, 1))
+```
+
+```{r}
+bp1 <- bptest(mod1)
+cat("Breusch-Pagan test — Model 1: BP =", round(bp1$statistic, 3),
+    ", p =", round(bp1$p.value, 3))
+```
+
+**Linearity** (Residuals vs Fitted): Residuals are evenly scattered around zero with no visible curvature, supporting the assumption of linearity.
+
+**Normality** (Q–Q plot): Residuals follow the theoretical normal line closely through the centre of the distribution; minor tail departures are negligible at n = 2 392 by the Central Limit Theorem.
+
+**Homoscedasticity** (Scale–Location): The spread of standardised residuals is roughly constant across fitted values. The Breusch–Pagan test confirms this (*p* = 0.692), providing no evidence of heteroscedasticity.
+
+**Influential observations** (Cook's Distance): No observations approach the conventional threshold of 1, indicating that no single point unduly drives the regression line.
+
+## Results and Conclusion
+
+The fitted model is:
+
+$$\widehat{\text{GPA}} = 1.623 + 0.029 \times \text{StudyTimeWeekly}$$
+
+The intercept (1.623) estimates the predicted GPA for a student who studies zero hours per week a plausible but academically weak starting point. For every additional hour studied per week, GPA is predicted to increase by 0.029 points (95% CI: 0.023 to 0.035), a slope that is statistically significant (*p* \< 0.001). However, statistical significance here must not be mistaken for practical importance: the model explains only R² = 3.2% of the variation in GPA. A student studying 10 more hours per week than a peer is predicted to achieve a GPA only 0.29 points higher a modest gain that is unlikely to be educationally decisive on its own. Study time is a real but weak predictor of academic performance; the vast majority of GPA variability is attributable to factors not captured in this single-variable model.
+
+------------------------------------------------------------------------
+
+# Part 2. Effect of Absences on GPA
+
+## Problem Formulation
+
+Does the number of school days missed predict GPA? We use `Absences` (0–29 days) as the sole predictor and `GPA` as the response, again with α = 0.05.
+
+## Graphical Summary
+
+```{r}
+ggplot(df, aes(x = Absences, y = GPA)) +
+  geom_point(alpha = 0.15, colour = "tomato") +
+  geom_smooth(method = "lm",    se = TRUE,  colour = "royalblue",  linewidth = 1) +
+  geom_smooth(method = "loess", se = FALSE, colour = "darkorange", linewidth = 1,
+              linetype = "dashed") +
+  labs(
+    title = "GPA vs. Number of Absences",
+    x     = "Number of Absences",
+    y     = "GPA"
+  ) +
+  theme_bw()
+```
+
+## Numerical Summary
+
+```{r}
+df |>
+  summarise(
+    `Mean GPA`      = round(mean(GPA), 3),
+    `SD GPA`        = round(sd(GPA), 3),
+    `Mean Absences` = round(mean(Absences), 3),
+    `SD Absences`   = round(sd(Absences), 3),
+    `Pearson r`     = round(cor(Absences, GPA), 3)
+  ) |>
+  kable(caption = "Descriptive statistics and correlation for GPA and absences.")
+```
+
+The scatter plot reveals a strikingly strong negative relationship between absences and GPA far more pronounced than the study-time association in Part 1. The LOESS and linear smoothers closely overlap, confirming that the relationship is well-described by a straight line. The Pearson correlation of r = −0.919 is exceptionally high for observational social-science data. Students average 14.54 absences (SD = 8.47), and the tight band of points around the smoother suggests that absences carry most of the predictive information about GPA.
+
+## Model Fitting
+
+```{r}
+mod2 <- lm(GPA ~ Absences, data = df)
+
+tidy(mod2, conf.int = TRUE, conf.level = 0.95) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Regression coefficients — GPA ~ Absences")
+```
+
+```{r}
+glance(mod2) |>
+  select(r.squared, adj.r.squared, sigma, statistic, p.value, df, nobs) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Model fit statistics — GPA ~ Absences")
+```
+
+## Diagnostics
+
+```{r}
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+plot(mod2, which = 1:4, sub.caption = "Model 2: GPA ~ Absences")
+par(mfrow = c(1, 1))
+```
+
+```{r}
+bp2 <- bptest(mod2)
+cat("Breusch-Pagan test — Model 2: BP =", round(bp2$statistic, 3),
+    ", p =", round(bp2$p.value, 3))
+```
+
+**Linearity** (Residuals vs Fitted): No curvature or pattern is visible, confirming a linear form is appropriate.
+
+**Normality** (Q–Q plot): Residuals align closely with the reference line; minor extremes are negligible at this sample size.
+
+**Homoscedasticity** (Scale-Location): Residual spread appears constant across fitted values. The Breusch–Pagan test (*p* = 0.257) provides no evidence of heteroscedasticity.
+
+**Influential observations** (Cook's Distance): No observation exceeds the threshold of concern, so no single student is distorting the model.
+
+## Results and Conclusion
+
+The fitted model is:
+
+$$\widehat{\text{GPA}} = 3.351 - 0.099 \times \text{Absences}$$
+
+The intercept (3.351) is directly interpretable: a student with perfect attendance is predicted to achieve a GPA of approximately 3.35 equivalent to a solid B+. Each additional absence reduces the predicted GPA by 0.099 points (95% CI: −0.101 to −0.098), a highly significant effect (*p* \< 0.001). Unlike the study-time model, this relationship is also practically important: the model explains R² = 84.5% of GPA variation, meaning absences alone account for the overwhelming majority of differences in student academic performance. A student with the average number of absences (≈15) is predicted to score 1.49 GPA points lower than a student with perfect attendance the difference between a B+ and failing. This underscores attendance as the single most powerful predictor of GPA in this dataset.
+
+------------------------------------------------------------------------
+
+# Part 3. Comparing Models 1 and 2
+
+```{r}
+compare_tbl <- tibble(
+  Model            = c("Model 1: GPA ~ StudyTimeWeekly",
+                       "Model 2: GPA ~ Absences"),
+  `R²`             = round(c(summary(mod1)$r.squared,
+                              summary(mod2)$r.squared), 4),
+  `Adj. R²`        = round(c(summary(mod1)$adj.r.squared,
+                              summary(mod2)$adj.r.squared), 4),
+  `Residual SE`    = round(c(summary(mod1)$sigma,
+                              summary(mod2)$sigma), 4),
+  `F-statistic`    = round(c(summary(mod1)$fstatistic[1],
+                              summary(mod2)$fstatistic[1]), 1),
+  `Slope (95% CI)` = c(
+    paste0(round(coef(mod1)[2], 3), " (",
+           round(confint(mod1)[2,1], 3), ", ",
+           round(confint(mod1)[2,2], 3), ")"),
+    paste0(round(coef(mod2)[2], 3), " (",
+           round(confint(mod2)[2,1], 3), ", ",
+           round(confint(mod2)[2,2], 3), ")")
+  )
+)
+
+kable(compare_tbl, caption = "Side-by-side comparison of Models 1 and 2.")
+```
+
+**Model 2 is unambiguously the better model** across every quantitative criterion:
+
+**Explanatory power**: Absences explains 84.5% of GPA variance versus only 3.2% for study time a 26-fold improvement in R². This is not a marginal difference; it means study time is essentially uninformative about GPA by comparison.
+
+**Prediction accuracy**: The residual standard error drops from 0.901 (Model 1) to 0.360 (Model 2). Model 1 predictions are, on average, nearly a full GPA point away from the true value; Model 2 predictions are less than half that.
+
+**Signal strength**: The F-statistic for Model 2 (13 043) vastly exceeds that of Model 1 (79), confirming that absences carry far more systematic information about GPA than study time does.
+
+**Caveat:** The very high R² of **84.5%** from a single predictor is atypical for social‑science data and should be interpreted cautiously. It’s also possible that absences and GPA draw on overlapping administrative records, which could artificially strengthen their observed association.
+
+**Diagnostics**: Both models satisfy regression assumptions satisfactorily. Neither displays non-linearity, heteroscedasticity, or influential observations of concern.
+
+------------------------------------------------------------------------
+
+# Part 4. Proposed Model
+
+## Problem Formulation
+
+Can we substantially improve GPA prediction beyond what absences alone offer, by incorporating additional student characteristics? We aim to build a model that is parsimonious, statistically well-behaved, and theoretically coherent.
+
+**Variable selection process**: We began by examining correlations and boxplots for all available predictors: `StudyTimeWeekly`, `Absences`, `Tutoring`, `ParentalSupport`, `Gender`, `Age`, `Ethnicity`, `ParentalEducation`, `Extracurricular`, `Sports`, `Music`, and `Volunteering`. Age showed near-zero correlation with GPA (r ≈ 0.01) and was excluded. Ethnicity, parental education, extracurricular activities, sports, music, and volunteering were each added to a baseline model in turn; individually they contributed less than 0.3% additional adjusted R² once the core predictors were held constant, and were excluded to avoid inflating model complexity without substantive gain.
+
+The final specification retains:
+
+-   `StudyTimeWeekly` and `Absences` as continuous predictors
+-   `TutoringF` as a binary factor (No/Yes)
+-   `ParentalSupportF` as an ordered five-level factor (reference: None)
+-   `GenderF` as a binary factor (reference: Male), retained for theoretical completeness as prior literature reports gender differences in academic performance, even though its significance will be evaluated in-model
+-   An interaction between `StudyTimeWeekly` and `TutoringF`, motivated by the hypothesis that tutoring may modify the returns to independent study
+
+## Graphical Summary
+
+```{r}
+#| fig-cap: "GPA distributions by tutoring status (left) and parental support level (right)."
+p_tut <- ggplot(df, aes(x = TutoringF, y = GPA, fill = TutoringF)) +
+  geom_boxplot(alpha = 0.7, show.legend = FALSE) +
+  scale_fill_manual(values = c("No" = "steelblue", "Yes" = "tomato")) +
+  labs(title = "GPA by Tutoring Status", x = "Tutoring", y = "GPA") +
+  theme_bw()
+
+p_sup <- ggplot(df, aes(x = ParentalSupportF, y = GPA, fill = ParentalSupportF)) +
+  geom_boxplot(alpha = 0.7, show.legend = FALSE) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(title = "GPA by Parental Support Level", x = "Parental Support", y = "GPA") +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1)) +
+  theme_bw()
+
+p_tut + p_sup
+```
+
+```{r}
+#| fig-cap: "GPA versus weekly study time, stratified by tutoring status. Separate OLS lines illustrate the interaction term."
+ggplot(df, aes(x = StudyTimeWeekly, y = GPA, colour = TutoringF)) +
+  geom_point(alpha = 0.12) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_colour_manual(values = c("No" = "steelblue", "Yes" = "tomato"),
+                      name = "Tutoring") +
+  labs(
+    title = "Interaction: Study Time × Tutoring on GPA",
+    x     = "Study Time (hours/week)",
+    y     = "GPA"
+  ) +
+  theme_bw()
+```
+
+Both tutoring and parental support show clear positive associations with GPA. The parental support boxplots reveal a consistent upward gradient across the five levels, indicating a dose-response relationship. The interaction plot shows that the slopes for tutored and non-tutored students are nearly identical a visual cue that the interaction may be negligible, which the model will confirm.
+
+## Model Fitting
+
+```{r}
+mod4 <- lm(GPA ~ StudyTimeWeekly * TutoringF + Absences +
+             ParentalSupportF + GenderF,
+           data = df)
+
+tidy(mod4, conf.int = TRUE, conf.level = 0.95) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Regression coefficients — proposed model with interaction.")
+```
+
+```{r}
+glance(mod4) |>
+  select(r.squared, adj.r.squared, sigma, statistic, p.value, df, nobs) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Model fit statistics — proposed model (Part 4).")
+```
+
+```{r}
+car::Anova(mod4, type = 2) |>
+  as.data.frame() |>
+  rownames_to_column("Term") |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Type II ANOVA — overall significance of each predictor.")
+```
+
+## Diagnostics
+
+```{r}
+#| fig-cap: "Regression diagnostic plots for the proposed model."
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+plot(mod4, which = 1:4, sub.caption = "Model 4: Full proposed model")
+par(mfrow = c(1, 1))
+```
+
+```{r}
+vif(mod4, type = "predictor") |>
+  as.data.frame() |>
+  rownames_to_column("Predictor") |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  kable(caption = "Variance Inflation Factors — multicollinearity check.")
+```
+
+```{r}
+bp4 <- bptest(mod4)
+cat("Breusch-Pagan test — Model 4: BP =", round(bp4$statistic, 3),
+    ", p =", round(bp4$p.value, 3))
+```
+
+**Linearity** (Residuals vs Fitted): No systematic curvature is visible; a linear form is appropriate for the continuous predictors.
+
+**Normality** (Q–Q plot): Residuals follow the theoretical normal line closely; minor tail departures are negligible at n = 2 392.
+
+**Homoscedasticity** (Scale–Location): The spread of residuals is broadly constant. The Breusch–Pagan test (*p* = 0.985) provides no evidence of heteroscedasticity.
+
+**Multicollinearity** (VIF): All VIF values fall well below the conventional threshold of 5. The interaction term carries a slightly elevated VIF relative to its main effects, as expected algebraically, but remains within acceptable limits.
+
+**Influential observations** (Cook's Distance): No observation exerts undue leverage; the fitted coefficients are not driven by any individual data point.
+
+All assumptions are satisfactorily met. The model is statistically valid for inference.
+
+## Result Interpretation and conclusion:
+
+The general model form is:
+
+$$
+\widehat{\text{GPA}} = \beta_0 + \beta_1 \cdot \text{Study} + \beta_2 \cdot \mathbf{1}_{\text{Tutoring=Yes}}
++ \beta_3 \cdot \text{Study} \times \mathbf{1}_{\text{Tutoring=Yes}}
++ \beta_4 \cdot \text{Absences} + \boldsymbol{\beta}_5 \cdot \text{ParentalSupport} + \beta_6 \cdot \mathbf{1}_{\text{Female}}
+$$
+
+To make this concrete, the estimated equation for a **male, non-tutored student with no parental support** (all reference categories) is:
+
+$$\widehat{\text{GPA}} = 2.654 + 0.029 \times \text{StudyTimeWeekly} - 0.099 \times \text{Absences}$$
+
+For a **female, tutored student with Very High parental support**:
+
+$$\widehat{\text{GPA}} = 2.654 + 0.260 + 0.621 + 0.012 + (0.029 - 0.001) \times \text{StudyTimeWeekly} - 0.099 \times \text{Absences}$$ $$= 3.547 + 0.028 \times \text{StudyTimeWeekly} - 0.099 \times \text{Absences}$$
+
+This illustrates how a student with strong contextual support starts from a GPA baseline nearly 0.9 points higher before a single hour of study is counted.
+
+**Key findings from the estimated coefficients:**
+
+### **Absences**
+
+Absences remain the strongest predictor: each additional absence lowers predicted GPA by **0.099** points (95% CI: −0.101 to −0.098). The effect is identical to the simple model, confirming its stability and dominant influence.
+
+### **Study Time (Non‑Tutored Students)**
+
+Each extra weekly study hour increases GPA by **0.029** points (95% CI: 0.027 to 0.031). The effect is statistically significant but modest compared with other predictors.
+
+### **Tutoring Main Effect**
+
+Tutored students score about **0.260** GPA points higher (95% CI: 0.218 to 0.303) than non‑tutored peers at the same study hours. This is a meaningful fixed uplift, roughly equivalent to 2.6 extra study hours per week.
+
+### **Tutoring Interaction**
+
+The interaction (−0.001, p = 0.630) is not significant, indicating tutoring does *not* change the effectiveness of additional study hours. Tutoring provides a fixed benefit rather than modifying study returns.
+
+### **Parental Support**
+
+GPA increases steadily with parental support: +0.171 (Low), +0.309 (Moderate), +0.463 (High), +0.621 (Very High), all p \< 0.001. Each step adds roughly **0.15 GPA points**, showing a strong dose‑response pattern.
+
+### **Gender**
+
+Female students score **0.012** GPA points higher than males (p = 0.216), a non‑significant difference. Gender adds no meaningful predictive value but is retained because it does not distort other estimates.
+
+## Comparison with Earlier Models
+
+```{r}
+all_models <- tibble(
+  Model         = c("Model 1: GPA ~ StudyTimeWeekly",
+                    "Model 2: GPA ~ Absences",
+                    "Model 4: Proposed model"),
+  `R²`          = round(c(summary(mod1)$r.squared,
+                           summary(mod2)$r.squared,
+                           summary(mod4)$r.squared), 4),
+  `Adj. R²`     = round(c(summary(mod1)$adj.r.squared,
+                           summary(mod2)$adj.r.squared,
+                           summary(mod4)$adj.r.squared), 4),
+  `Residual SE` = round(c(summary(mod1)$sigma,
+                           summary(mod2)$sigma,
+                           summary(mod4)$sigma), 4),
+  `Predictors`  = c(1, 1, 9)
+)
+
+kable(all_models, caption = "Performance comparison across all three models.")
+```
+
+## Result Interpretation and conclusion:
+
+The proposed model attains an adjusted R² of **0.931**, improving on **0.845** (Model 2) and **0.032** (Model 1). Residual standard error decreases from **0.901 → 0.360 → 0.241**, showing progressively sharper predictive accuracy. Overall, the full model explains **93.1%** of GPA variation—an 8.6‑point gain over the already strong absences‑only model.
+
+This improvement is driven entirely by contextual variables: parental support provides the largest incremental contribution, followed by tutoring. Study time’s coefficient remains stable across models, indicating that its effect is not confounded by the added predictors and that the parameter estimates are structurally consistent.
+
+The unusually high R² values, even in Model 2, suggest the dataset may encode a strong built‑in relationship between absences and GPA, which is rare in real observational settings. Nonetheless, all estimated effects are theoretically coherent and statistically robust. Absences remain the primary determinant of GPA, but the full model shows that contextual supports—parental involvement and tutoring—offer meaningful, independent advantages. This makes the full model better suited for identifying at‑risk students and guiding targeted interventions that improve attendance, expand tutoring access, and strengthen home support structures.
